@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FotoRelatório Web</title>
+  <meta name="description" content="Consulte e exporte os relatórios do FotoRelatório sincronizados com o seu Google Drive.">
+  <meta name="theme-color" content="#0D47A1">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icones/icone-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="barra" id="barra" hidden>
+    <a class="marca" href="#/">FotoRelatório <span>Web</span></a>
+    <nav class="secoes" aria-label="Seções">
+      <a href="#/" id="abaRelatorios">Relatórios</a>
+      <a href="#/projetos" id="abaProjetos">Projetos</a>
+    </nav>
+    <input type="search" id="busca" placeholder="Buscar por título, subtítulo ou tag" aria-label="Buscar">
+    <div class="acoes">
+      <span class="conta" id="conta"></span>
+      <button type="button" class="botao-barra" id="botaoAtualizar">Atualizar</button>
+      <button type="button" class="botao-barra" id="botaoConfig">Configurações</button>
+      <button type="button" class="botao-barra" id="botaoSair">Sair</button>
+    </div>
+  </header>
+
+  <main id="conteudo"></main>
+
+  <!-- Configurações do relatório (cabeçalho, rodapé, legenda, texto sobre a foto) -->
+  <dialog id="dialogoConfig" class="dialogo">
+    <form method="dialog" id="formConfig">
+      <h2>Configurações do relatório</h2>
+      <p class="dica">Valem para os arquivos gerados neste navegador. As configurações do app do celular não vão para o Google Drive, então é preciso repeti-las aqui.</p>
+
+      <fieldset>
+        <legend>Cabeçalho</legend>
+        <label class="opcao"><input type="radio" name="cabecalhoComImagem" value="nao"> Logotipo + linhas institucionais</label>
+        <label class="opcao"><input type="radio" name="cabecalhoComImagem" value="sim"> Uma única imagem como cabeçalho</label>
+        <div class="imagem-config" data-quando="logo">
+          <span>Logotipo</span>
+          <img id="previaLogo" alt="" hidden>
+          <input type="file" id="arquivoLogo" accept="image/*">
+          <button type="button" class="link" id="removerLogo">Remover</button>
+        </div>
+        <div class="imagem-config" data-quando="imagem">
+          <span>Imagem do cabeçalho</span>
+          <img id="previaCabecalho" alt="" hidden>
+          <input type="file" id="arquivoCabecalho" accept="image/*">
+          <button type="button" class="link" id="removerCabecalho">Remover</button>
+        </div>
+        <div data-quando="logo">
+          <label>Linha 1 <input type="text" name="linha1"></label>
+          <label>Linha 2 <input type="text" name="linha2"></label>
+          <label>Linha 3 <input type="text" name="linha3"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Rodapé e coordenadas</legend>
+        <label>Rodapé padrão (equipe/setor) <input type="text" name="equipeSetorPadrao"></label>
+        <label>Formato de coordenada
+          <select name="formatoCoordenada">
+            <option value="UTM">UTM</option>
+            <option value="GRAUS_DECIMAIS">Graus decimais (Lat/Lon)</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Na legenda (abaixo da foto)</legend>
+        <label class="opcao"><input type="checkbox" name="mostrarDataNaLegenda"> Data</label>
+        <label class="opcao"><input type="checkbox" name="mostrarHoraNaLegenda"> Hora</label>
+        <label class="opcao"><input type="checkbox" name="mostrarCoordenadasNaLegenda"> Coordenadas</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Impresso sobre a foto</legend>
+        <label class="opcao"><input type="checkbox" name="mostrarDataNaFoto"> Data</label>
+        <label class="opcao"><input type="checkbox" name="mostrarHoraNaFoto"> Hora</label>
+        <label class="opcao"><input type="checkbox" name="mostrarCoordenadasNaFoto"> Coordenadas</label>
+        <label>Marca d'água (texto livre; uma linha por linha)
+          <textarea name="textoMarcaDagua" rows="2"></textarea>
+        </label>
+        <label>Tamanho do texto na foto: <output id="saidaTamanho"></output>
+          <input type="range" name="tamanhoFonteFotoPct" min="50" max="300" step="10">
+        </label>
+      </fieldset>
+
+      <div class="rodape-dialogo">
+        <button type="button" class="botao secundario" id="cancelarConfig">Cancelar</button>
+        <button type="submit" class="botao">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Foto ampliada -->
+  <dialog id="visor" class="visor">
+    <button type="button" class="fechar" id="fecharVisor" aria-label="Fechar">×</button>
+    <img id="imagemVisor" alt="">
+    <p id="legendaVisor"></p>
+  </dialog>
+
+  <!-- Andamento de uma exportação e arquivo pronto -->
+  <dialog id="dialogoArquivo" class="dialogo estreito">
+    <h2 id="tituloArquivo"></h2>
+    <p id="textoArquivo"></p>
+    <progress id="barraArquivo" max="100" value="0"></progress>
+    <div class="rodape-dialogo" id="acoesArquivo"></div>
+  </dialog>
+
+  <div id="avisos" aria-live="polite"></div>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+name: Publicar site (GitHub Pages)
+
+# Publica o site (FotoRelatório Web) no GitHub Pages a cada envio à branch principal.
+# É um site estático: não há etapa de compilação.
+#
+# Antes da primeira publicação: no repositório, Settings → Pages → Build and deployment →
+# Source: "GitHub Actions".
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicacao.outputs.page_url }}
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar o GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Empacotar o site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Publicar
+        id: publicacao
+        uses: actions/deploy-pages@v4
