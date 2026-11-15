@@ -61,7 +61,8 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 8px;
   font: inherit;
 }
-.acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* margin-left: auto mantém o grupo à direita também quando a busca está oculta (dentro de um relatório ou projeto). */
+.acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
 .conta { font-size: 13px; opacity: .85; overflow-wrap: anywhere; }
 .botao-barra {
   padding: 6px 10px;
@@ -289,6 +290,7 @@ a.cartao:hover { border-color: var(--primaria); box-shadow: 0 1px 6px rgba(21, 1
 
 @media (max-width: 600px) {
   .conta { display: none; }
+  .acoes { margin-left: 0; }
   .grade { grid-template-columns: 1fr; }
   .fotos { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
