@@ -5,7 +5,7 @@
 // Não é segredo: pode ficar no repositório. Passo a passo em README.md.
 //
 // Se ficar vazio, o site pede o ID na primeira abertura e o guarda só neste navegador.
-export const CLIENT_ID = "";
+export const CLIENT_ID = "995285454369-f72sl033m6rl421g6tri0u66pjflvssa.apps.googleusercontent.com";
 
 // Só os arquivos e pastas criados pelo próprio app (mesma permissão do app Android).
 export const ESCOPO = "https://www.googleapis.com/auth/drive.file";
