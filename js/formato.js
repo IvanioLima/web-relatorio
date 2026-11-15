@@ -53,7 +53,7 @@ export const COR_STATUS = {
   PENDENTE: "#EF6C00",
 };
 
-/** UTM em metros inteiros (ex.: "24M 433839 9637191"); Lat/Lon com 6 casas. Nulo se a foto não tem localização. */
+/** UTM em metros inteiros (ex.: "23L 186213 8253371"); Lat/Lon com 6 casas. Nulo se a foto não tem localização. */
 export function textoCoordenadas(foto, formato, comRotuloUtm = false) {
   if (!foto.temLocalizacao) return null;
   if (formato === "UTM" && foto.utmZona) {
