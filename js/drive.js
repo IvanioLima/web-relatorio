@@ -1,5 +1,6 @@
 // Acesso ao Google Drive direto do navegador (sem servidor): autorização pelo Google Identity
-// Services e leitura das pastas de relatórios que o app Android sincronizou.
+// Services, leitura das pastas de relatórios que o app Android sincronizou e gravação dos
+// dados editados no site (ver edicao.js).
 //
 // No Drive, a pasta "FotoRelatório" tem uma pasta por relatório. As propriedades privadas da
 // pasta (appProperties) guardam o uuid, a versão e o id do JSON vigente (ver Sincronizador.kt).
@@ -85,10 +86,10 @@ export async function entrar() {
   }
 }
 
-async function requisitar(url, tentativa = 0) {
+async function requisitar(url, opcoes = {}, tentativa = 0) {
   const token = lerToken();
   if (!token) throw new SessaoExpirada();
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const r = await fetch(url, { ...opcoes, headers: { ...(opcoes.headers || {}), Authorization: `Bearer ${token}` } });
   if (r.status === 401) {
     sessionStorage.removeItem(CHAVE_TOKEN);
     throw new SessaoExpirada();
@@ -98,14 +99,15 @@ async function requisitar(url, tentativa = 0) {
     const corpo = r.status === 403 ? await r.clone().text() : "";
     if (r.status !== 403 || /rateLimit|userRateLimit/i.test(corpo)) {
       await new Promise((ok) => setTimeout(ok, 600 * 2 ** tentativa + Math.random() * 300));
-      return requisitar(url, tentativa + 1);
+      return requisitar(url, opcoes, tentativa + 1);
     }
   }
   if (!r.ok) throw new Error(`Google Drive respondeu ${r.status}`);
   return r;
 }
 
-const json = async (url) => (await requisitar(url)).json();
+const json = async (url, opcoes) => (await requisitar(url, opcoes)).json();
+const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
 
 async function paginar(q, campos) {
   const itens = [];
@@ -180,5 +182,42 @@ export const drive = {
 
   async baixar(arquivoId) {
     return (await requisitar(`${API}/files/${arquivoId}?alt=media`)).blob();
+  },
+
+  // ---------- escrita (edição dos dados do relatório; as fotos nunca são alteradas) ----------
+
+  /** Estado atual da pasta no Drive: { versao, jsonId }. Lança erro se foi para a lixeira. */
+  async lerPasta(pastaId) {
+    const f = await json(`${API}/files/${pastaId}?fields=id,trashed,appProperties`);
+    if (f.trashed) throw new Error("Este relatório foi excluído em outro aparelho. Toque em Atualizar.");
+    return { versao: f.appProperties?.fr_versao || "", jsonId: f.appProperties?.fr_json || "" };
+  },
+
+  /** Cria um arquivo JSON na pasta e devolve o id (o app faz igual: cria um novo a cada versão). */
+  async criarJson(pastaId, nome, texto) {
+    const limite = `fotorelatorio${Date.now()}`;
+    const corpo =
+      `--${limite}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+      `${JSON.stringify({ name: nome, parents: [pastaId] })}\r\n` +
+      `--${limite}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${texto}\r\n--${limite}--`;
+    const r = await json(`${UPLOAD}/files?uploadType=multipart&fields=id`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/related; boundary=${limite}` },
+      body: corpo,
+    });
+    return r.id;
+  },
+
+  /** Troca propriedades privadas da pasta (as não citadas ficam como estão). */
+  async atualizarPasta(pastaId, propriedades) {
+    await requisitar(`${API}/files/${pastaId}?fields=id`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({ appProperties: propriedades }),
+    });
+  },
+
+  async apagarArquivo(arquivoId) {
+    await requisitar(`${API}/files/${arquivoId}`, { method: "DELETE" });
   },
 };

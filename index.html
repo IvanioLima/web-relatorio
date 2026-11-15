@@ -95,6 +95,69 @@
     </form>
   </dialog>
 
+  <!-- Editar dados do relatório -->
+  <dialog id="dialogoRelatorio" class="dialogo">
+    <form method="dialog" id="formRelatorio">
+      <h2>Editar dados do relatório</h2>
+      <label>Projeto
+        <select name="projeto"></select>
+      </label>
+      <p class="dica" id="dicaProjeto" hidden>Título e subtítulo vêm do projeto.</p>
+      <label>Título <input type="text" name="titulo" required></label>
+      <label>Subtítulo <input type="text" name="subtitulo"></label>
+      <label>Rodapé (opcional; em branco usa o padrão das Configurações) <input type="text" name="equipeSetor"></label>
+      <label>Tags (separe por vírgula) <input type="text" name="tags"></label>
+      <label class="opcao"><input type="checkbox" name="concluido"> Concluído</label>
+      <div class="rodape-dialogo">
+        <button type="button" class="botao secundario" data-fechar>Cancelar</button>
+        <button type="submit" class="botao">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Editar foto -->
+  <dialog id="dialogoFoto" class="dialogo">
+    <form method="dialog" id="formFoto">
+      <h2>Editar foto</h2>
+      <label>Legenda <textarea name="legenda" rows="4"></textarea></label>
+      <label>Status
+        <select name="status">
+          <option value="">Nenhum</option>
+          <option value="CONFORME">Conforme</option>
+          <option value="NAO_CONFORME">Não conforme</option>
+          <option value="NA">N/A</option>
+          <option value="PENDENTE">Pendente</option>
+        </select>
+      </label>
+      <label class="opcao"><input type="checkbox" name="oculta"> Não mostrar no relatório</label>
+      <div class="rodape-dialogo">
+        <button type="button" class="botao secundario" data-fechar>Cancelar</button>
+        <button type="submit" class="botao">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Editar projeto -->
+  <dialog id="dialogoProjeto" class="dialogo">
+    <form method="dialog" id="formProjeto">
+      <h2>Editar projeto</h2>
+      <p class="dica">Título e subtítulo valem para todos os relatórios do projeto. Marcar como concluído marca também os relatórios.</p>
+      <label>Título <input type="text" name="titulo" required></label>
+      <label>Subtítulo <input type="text" name="subtitulo"></label>
+      <label class="opcao"><input type="checkbox" name="concluido"> Concluído</label>
+      <div class="rodape-dialogo">
+        <button type="button" class="botao secundario" data-fechar>Cancelar</button>
+        <button type="submit" class="botao">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Gravando no Google Drive -->
+  <dialog id="dialogoSalvando" class="dialogo estreito">
+    <h2>Salvando no Google Drive…</h2>
+    <p id="textoSalvando"></p>
+  </dialog>
+
   <!-- Foto ampliada -->
   <dialog id="visor" class="visor">
     <button type="button" class="fechar" id="fecharVisor" aria-label="Fechar">×</button>

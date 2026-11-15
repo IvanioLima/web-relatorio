@@ -5,6 +5,7 @@ import { lerConfig, salvarConfig, imagemParaDataUrl } from "./configuracoes.js";
 import { carregarRelatorios, fotosParaExportar, limparCache, listarProjetos } from "./dados.js";
 import { demo } from "./demo.js";
 import * as acesso from "./drive.js";
+import { moverFoto, mudarDados, mudarDadosDoProjeto, mudarFoto, mudarProjeto, salvarRelatorio } from "./edicao.js";
 import { baixarArquivo, gerarKmz, gerarZipDeFotos } from "./exportar.js";
 import {
   COR_STATUS, ROTULO_STATUS, dataLonga, esc, linhasParaLegenda, nomeBaseProjeto, nomeBaseRelatorio,
@@ -223,6 +224,7 @@ function telaRelatorio(uuid) {
         <button type="button" class="botao" data-exportar="pdf" data-relatorio="${esc(r.uuid)}">PDF</button>
         <button type="button" class="botao secundario" data-exportar="zip" data-relatorio="${esc(r.uuid)}" ${exportaveis ? "" : "disabled"}>Fotos (.zip)</button>
         <button type="button" class="botao secundario" data-exportar="kmz" data-relatorio="${esc(r.uuid)}" ${exportaveis ? "" : "disabled"}>KMZ</button>
+        <button type="button" class="botao secundario" data-editar-relatorio="${esc(r.uuid)}">Editar dados</button>
       </div>
     </section>
     ${r.fotos.length
@@ -236,6 +238,12 @@ function telaRelatorio(uuid) {
               ${dados.length ? `<p class="dados">${dados.map(esc).join("<br>")}</p>` : ""}
               ${ROTULO_STATUS[f.status] ? `<span class="selo-foto" style="background:${COR_STATUS[f.status]}">${ROTULO_STATUS[f.status].toUpperCase()}</span>` : ""}
               ${f.oculta ? `<p class="nota">Não entra no relatório</p>` : ""}
+              <div class="acoes-foto">
+                <button type="button" class="botao-pequeno" data-mover="-1" data-indice="${i}" ${i === 0 ? "disabled" : ""} aria-label="Mover a foto ${i + 1} para antes">←</button>
+                <button type="button" class="botao-pequeno" data-mover="1" data-indice="${i}" ${i === r.fotos.length - 1 ? "disabled" : ""} aria-label="Mover a foto ${i + 1} para depois">→</button>
+                <span class="espaco"></span>
+                <button type="button" class="botao-pequeno" data-editar-foto="${i}">Editar</button>
+              </div>
             </figcaption>
           </figure>`;
         }).join("")}</div>`
@@ -267,6 +275,7 @@ function telaProjeto(uuid) {
         <button type="button" class="botao" data-exportar="pdf" data-projeto="${esc(p.uuid)}" ${marcados.length ? "" : "disabled"}>PDF compilado</button>
         <button type="button" class="botao secundario" data-exportar="zip" data-projeto="${esc(p.uuid)}" ${marcados.length ? "" : "disabled"}>Fotos (.zip)</button>
         <button type="button" class="botao secundario" data-exportar="kmz" data-projeto="${esc(p.uuid)}" ${marcados.length ? "" : "disabled"}>KMZ</button>
+        <button type="button" class="botao secundario" data-editar-projeto="${esc(p.uuid)}">Editar projeto</button>
       </div>
       ${parcial ? `<p class="aviso-parcial">${aviso}</p>` : ""}
     </section>
@@ -302,11 +311,165 @@ function ligarEventos() {
       else exportarRelatorio(b.dataset.relatorio, b.dataset.exportar);
     })
   );
+  conteudo.querySelectorAll("[data-editar-relatorio]").forEach((b) =>
+    b.addEventListener("click", () => editarRelatorio(b.dataset.editarRelatorio))
+  );
+  conteudo.querySelectorAll("[data-editar-projeto]").forEach((b) =>
+    b.addEventListener("click", () => editarProjeto(b.dataset.editarProjeto))
+  );
   const [, secao, id] = location.hash.split("/");
   if (secao === "relatorio") {
     const r = estado.relatorios.find((x) => x.uuid === decodeURIComponent(id || ""));
-    if (r) ligarFotos(r);
+    if (!r) return;
+    ligarFotos(r);
+    conteudo.querySelectorAll("[data-editar-foto]").forEach((b) =>
+      b.addEventListener("click", () => editarFoto(r, r.fotos[Number(b.dataset.editarFoto)]))
+    );
+    conteudo.querySelectorAll("[data-mover]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const foto = r.fotos[Number(b.dataset.indice)];
+        gravar([{ relatorio: r, mudar: moverFoto(foto.uuid, Number(b.dataset.mover)) }]);
+      })
+    );
   }
+}
+
+// ---------------------------------------------------------------- edição
+
+/**
+ * Grava as mudanças no Drive (uma por relatório), mostrando o andamento, e relê os relatórios.
+ * @param itens [{ relatorio, mudar }]
+ * @returns true se tudo foi gravado
+ */
+async function gravar(itens) {
+  const d = $("dialogoSalvando");
+  $("textoSalvando").textContent = "";
+  d.showModal();
+  let feitos = 0;
+  try {
+    for (const { relatorio, mudar } of itens) {
+      if (itens.length > 1) $("textoSalvando").textContent = `Relatório ${feitos + 1} de ${itens.length}`;
+      await salvarRelatorio(fonte, relatorio, mudar);
+      feitos++;
+    }
+  } catch (e) {
+    d.close();
+    if (e instanceof acesso.SessaoExpirada) {
+      tratarErro(e);
+      return false;
+    }
+    console.error(e);
+    avisar(
+      (feitos ? `${feitos} de ${itens.length} relatórios foram gravados antes do erro. ` : "") + (e.message || "Não foi possível salvar."),
+      true
+    );
+    if (feitos) await recarregar();
+    return false;
+  }
+  d.close();
+  // Mantém a posição da tela (ao mover fotos, por exemplo, a lista não volta para o topo).
+  const posicao = window.scrollY;
+  await recarregar();
+  window.scrollTo(0, posicao);
+  avisar("Alterações salvas. O celular as recebe na próxima sincronização.");
+  return true;
+}
+
+/** Liga os botões Cancelar de um diálogo e o abre; [aoSalvar] recebe o formulário. */
+function abrirFormulario(idDialogo, idForm, aoSalvar) {
+  const d = $(idDialogo);
+  const form = $(idForm);
+  d.querySelectorAll("[data-fechar]").forEach((b) => (b.onclick = () => d.close()));
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    d.close();
+    await aoSalvar(form);
+  };
+  d.showModal();
+  return form;
+}
+
+function editarRelatorio(uuid) {
+  const r = estado.relatorios.find((x) => x.uuid === uuid);
+  if (!r) return;
+  const form = $("formRelatorio");
+  form.elements.projeto.innerHTML =
+    `<option value="">Nenhum (relatório avulso)</option>` +
+    estado.projetos.map((p) => `<option value="${esc(p.uuid)}">${esc(p.titulo)}</option>`).join("");
+  form.elements.projeto.value = r.projeto?.uuid || "";
+  form.elements.equipeSetor.value = r.equipeSetor;
+  form.elements.tags.value = tags(r.tags).join(", ");
+  form.elements.concluido.checked = r.status === "FINALIZADO";
+  let tituloLivre = r.projeto ? "" : r.titulo;
+  let subtituloLivre = r.projeto ? "" : r.subtitulo;
+  // Com projeto: título e subtítulo são os dele, bloqueados. Sem projeto: editáveis.
+  const aplicarProjeto = () => {
+    const p = estado.projetos.find((x) => x.uuid === form.elements.projeto.value);
+    form.elements.titulo.value = p ? p.titulo : tituloLivre || r.titulo;
+    form.elements.subtitulo.value = p ? p.subtitulo : subtituloLivre || (r.projeto ? r.subtitulo : "");
+    form.elements.titulo.disabled = form.elements.subtitulo.disabled = !!p;
+    $("dicaProjeto").hidden = !p;
+  };
+  form.elements.titulo.oninput = () => (tituloLivre = form.elements.titulo.value);
+  form.elements.subtitulo.oninput = () => (subtituloLivre = form.elements.subtitulo.value);
+  form.elements.projeto.onchange = aplicarProjeto;
+  aplicarProjeto();
+
+  abrirFormulario("dialogoRelatorio", "formRelatorio", async () => {
+    const projeto = estado.projetos.find((x) => x.uuid === form.elements.projeto.value) || null;
+    const dados = mudarDados({
+      titulo: form.elements.titulo.value,
+      subtitulo: form.elements.subtitulo.value,
+      equipeSetor: form.elements.equipeSetor.value,
+      tags: tags(form.elements.tags.value).join(","),
+      concluido: form.elements.concluido.checked,
+    });
+    const trocouProjeto = (projeto?.uuid || "") !== (r.projeto?.uuid || "");
+    await gravar([{
+      relatorio: r,
+      mudar: (json) => {
+        // Primeiro o projeto (define se título/subtítulo ficam livres), depois os demais dados.
+        if (trocouProjeto) mudarProjeto(projeto)(json);
+        dados(json);
+      },
+    }]);
+  });
+}
+
+function editarFoto(relatorio, foto) {
+  const form = $("formFoto");
+  form.elements.legenda.value = foto.legenda;
+  form.elements.status.value = ROTULO_STATUS[foto.status] ? foto.status : "";
+  form.elements.oculta.checked = foto.oculta;
+  abrirFormulario("dialogoFoto", "formFoto", () =>
+    gravar([{
+      relatorio,
+      mudar: mudarFoto(foto.uuid, {
+        legenda: form.elements.legenda.value.trim(),
+        status: form.elements.status.value,
+        oculta: form.elements.oculta.checked,
+      }),
+    }])
+  );
+}
+
+function editarProjeto(uuid) {
+  const p = estado.projetos.find((x) => x.uuid === uuid);
+  if (!p) return;
+  const form = $("formProjeto");
+  form.elements.titulo.value = p.titulo;
+  form.elements.subtitulo.value = p.subtitulo;
+  form.elements.concluido.checked = p.status === "FINALIZADO";
+  abrirFormulario("dialogoProjeto", "formProjeto", () => {
+    const novo = {
+      titulo: form.elements.titulo.value.trim(),
+      subtitulo: form.elements.subtitulo.value.trim(),
+      concluido: form.elements.concluido.checked,
+    };
+    const agora = Date.now();
+    // O projeto viaja dentro de cada relatório: todos precisam ser regravados.
+    return gravar(p.relatorios.map((r) => ({ relatorio: r, mudar: mudarDadosDoProjeto(p, novo, agora) })));
+  });
 }
 
 // ---------------------------------------------------------------- fotos (miniaturas e visor)

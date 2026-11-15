@@ -114,7 +114,7 @@ export const demo = {
 
   async listarPastas() {
     await espera(150);
-    return RELATORIOS.map((r) => r.pasta);
+    return RELATORIOS.map((r) => ({ ...r.pasta }));
   },
 
   async lerJson(pasta) {
@@ -123,7 +123,8 @@ export const demo = {
 
   async listarArquivos(pastaId) {
     const r = RELATORIOS.find((x) => x.pasta.id === pastaId);
-    return r.json.fotos.flatMap((f) => {
+    // Como no Drive, os arquivos das fotos continuam na pasta mesmo que o JSON mude.
+    return (r.fotosIniciais ||= r.json.fotos).flatMap((f) => {
       const itens = [{ id: `${f.uuid}_o1.jpg`, nome: `${f.uuid}_o1.jpg`, miniatura: "" }];
       if (f.temAnotada) itens.push({ id: `${f.uuid}_a1.jpg`, nome: `${f.uuid}_a1.jpg`, miniatura: "" });
       return itens;
@@ -134,4 +135,26 @@ export const demo = {
     await espera(30);
     return fotoFicticia(arquivoId);
   },
+
+  // ---------- escrita (só na memória: recarregar a página desfaz) ----------
+
+  async lerPasta(pastaId) {
+    const { pasta } = RELATORIOS.find((r) => r.pasta.id === pastaId);
+    return { versao: pasta.versao, jsonId: pasta.jsonId };
+  },
+
+  async criarJson(pastaId, nome, texto) {
+    await espera(120);
+    RELATORIOS.find((r) => r.pasta.id === pastaId).pendente = JSON.parse(texto);
+    return `json-${nome}`;
+  },
+
+  async atualizarPasta(pastaId, propriedades) {
+    const r = RELATORIOS.find((x) => x.pasta.id === pastaId);
+    r.json = r.pendente;
+    r.pasta.versao = propriedades.fr_versao;
+    r.pasta.jsonId = propriedades.fr_json;
+  },
+
+  async apagarArquivo() {},
 };

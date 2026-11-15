@@ -13,4 +13,4 @@ export const ESCOPO = "https://www.googleapis.com/auth/drive.file";
 // Nome da pasta de sincronização no Google Drive (igual ao do app Android).
 export const NOME_PASTA_SYNC = "FotoRelatório";
 
-export const VERSAO = "0.1.0";
+export const VERSAO = "0.2.0";

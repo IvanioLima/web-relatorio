@@ -200,6 +200,23 @@ a.cartao:hover { border-color: var(--primaria); box-shadow: 0 1px 6px rgba(21, 1
 .foto .selo-foto { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 3px; color: #fff; font-size: 11px; font-weight: 700; }
 .foto .nota { margin-top: 4px; color: var(--em-execucao); font-size: 12px; }
 
+.foto .acoes-foto { display: flex; align-items: center; gap: 4px; margin-top: 8px; }
+.foto .acoes-foto .espaco { flex: 1; }
+.botao-pequeno {
+  min-width: 34px;
+  padding: 5px 9px;
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  background: var(--superficie);
+  color: var(--primaria);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.botao-pequeno:hover { background: var(--selecao); }
+.botao-pequeno:disabled { opacity: .35; cursor: default; }
+
 .cartao-vistoria { display: flex; gap: 10px; align-items: flex-start; }
 .cartao-vistoria input { margin-top: 4px; width: 18px; height: 18px; }
 .cartao-vistoria a { flex: 1; color: inherit; text-decoration: none; }
@@ -222,6 +239,7 @@ a.cartao:hover { border-color: var(--primaria); box-shadow: 0 1px 6px rgba(21, 1
 .dialogo legend { padding: 0 6px; font-weight: 700; }
 .dialogo label { display: block; margin: 8px 0; font-size: 14px; }
 .dialogo label.opcao { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.dialogo input:disabled { background: var(--fundo); color: var(--texto-secundario); }
 .dialogo input[type="text"], .dialogo select, .dialogo textarea {
   display: block;
   width: 100%;
