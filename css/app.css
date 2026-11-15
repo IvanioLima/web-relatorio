@@ -183,7 +183,8 @@ a.cartao:hover { border-color: var(--primaria); box-shadow: 0 1px 6px rgba(21, 1
   border-radius: var(--raio);
   background: var(--superficie);
 }
-.foto.oculta { opacity: .55; }
+/* Só a imagem e o texto ficam esmaecidos; os botões continuam com aparência normal. */
+.foto.oculta .miniatura, .foto.oculta .legenda, .foto.oculta .dados { opacity: .55; }
 .foto button.miniatura {
   display: block;
   width: 100%;
