@@ -141,6 +141,9 @@ export async function emParalelo(itens, limite, tarefa) {
 export const drive = {
   nome: "drive",
 
+  /** Pasta raiz usada para projetos.json e indice.json (a com mais relatórios). */
+  raiz: null,
+
   /** Pastas de relatórios: [{ id, nome, uuid, versao, jsonId }]. */
   async listarPastas() {
     const nome = NOME_PASTA_SYNC.replace(/'/g, "\\'");
@@ -148,6 +151,13 @@ export const drive = {
     const listas = await emParalelo(raizes, 2, (raiz) =>
       paginar(`'${raiz.id}' in parents and trashed=false and mimeType='${MIME_PASTA}'`, "id,name,appProperties")
     );
+    let maior = -1;
+    listas.forEach((lista, i) => {
+      if (lista.length > maior) {
+        maior = lista.length;
+        this.raiz = raizes[i].id;
+      }
+    });
     return listas
       .flat()
       .filter((p) => p.appProperties?.fr_uuid)
@@ -219,5 +229,33 @@ export const drive = {
 
   async apagarArquivo(arquivoId) {
     await requisitar(`${API}/files/${arquivoId}`, { method: "DELETE" });
+  },
+
+  // ---------- arquivos da pasta raiz (projetos.json, indice.json) ----------
+
+  async arquivosRaiz(nome) {
+    if (!this.raiz) return [];
+    const itens = await paginar(`'${this.raiz}' in parents and trashed=false and name='${nome}'`, "id,modifiedTime");
+    return itens.sort((a, b) => (b.modifiedTime || "").localeCompare(a.modifiedTime || ""));
+  },
+
+  /** Conteúdo (JSON) do arquivo [nome] mais recente da raiz, ou nulo se não existir. */
+  async lerArquivoRaiz(nome) {
+    const [maisRecente] = await this.arquivosRaiz(nome);
+    return maisRecente ? json(`${API}/files/${maisRecente.id}?alt=media`) : null;
+  },
+
+  /** Grava [objeto] como [nome] na raiz: cria o arquivo novo e depois apaga os anteriores (igual ao app). */
+  async gravarArquivoRaiz(nome, objeto) {
+    if (!this.raiz) return;
+    const anteriores = await this.arquivosRaiz(nome);
+    await this.criarJson(this.raiz, nome, JSON.stringify(objeto));
+    for (const item of anteriores) {
+      try {
+        await this.apagarArquivo(item.id);
+      } catch {
+        // Fica para a próxima gravação.
+      }
+    }
   },
 };

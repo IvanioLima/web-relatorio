@@ -2,7 +2,7 @@
 
 import { VERSAO } from "./config.js";
 import { lerConfig, salvarConfig, imagemParaDataUrl } from "./configuracoes.js";
-import { carregarRelatorios, fotosParaExportar, limparCache, listarProjetos } from "./dados.js";
+import { carregarRelatorios, fotosParaExportar, gravarProjeto, limparCache } from "./dados.js";
 import { demo } from "./demo.js";
 import * as acesso from "./drive.js";
 import { moverFoto, mudarDados, mudarDadosDoProjeto, mudarFoto, mudarProjeto, salvarRelatorio } from "./edicao.js";
@@ -98,12 +98,12 @@ async function iniciarSessao() {
 async function recarregar() {
   conteudo.innerHTML = `<p class="vazio" id="carregando">Lendo os relatórios do Google Drive…</p>`;
   try {
-    const { relatorios, falhas } = await carregarRelatorios(fonte, (feitos, total) => {
+    const { relatorios, projetos, falhas } = await carregarRelatorios(fonte, (feitos, total) => {
       const el = $("carregando");
       if (el) el.textContent = `Lendo os relatórios do Google Drive… ${feitos} de ${total}`;
     });
     estado.relatorios = relatorios;
-    estado.projetos = listarProjetos(relatorios);
+    estado.projetos = projetos;
     estado.carregado = true;
     if (falhas) avisar(`${falhas} relatório(s) não puderam ser lidos.`, true);
     rotear();
@@ -189,7 +189,7 @@ function telaProjetos() {
   );
   const vazio = estado.projetos.length
     ? "Nenhum projeto encontrado para esta busca."
-    : "Nenhum projeto ainda. Os projetos aparecem aqui quando têm ao menos um relatório sincronizado.";
+    : "Nenhum projeto ainda. Os projetos criados no app aparecem aqui depois da sincronização.";
   return `
     <div class="cabecalho-lista"><h1>Projetos</h1><span class="contagem">${filtrados.length} de ${estado.projetos.length}</span></div>
     ${filtrados.length
@@ -198,7 +198,7 @@ function telaProjetos() {
             <div class="topo"><h3>${esc(p.titulo)}</h3>${selo(p.status)}</div>
             ${p.subtitulo ? `<p class="sub">${esc(p.subtitulo)}</p>` : ""}
             <p class="vistoria">${plural(p.relatorios.length, "relatório", "relatórios")}</p>
-            <p class="meta">Criado em ${dataLonga(p.dataCriacao || p.relatorios[0].dataCriacao)}</p>
+            <p class="meta">Criado em ${dataLonga(p.dataCriacao || p.relatorios[0]?.dataCriacao || Date.now())}</p>
           </a>`).join("")}</div>`
       : `<p class="vazio">${vazio}</p>`}`;
 }
@@ -279,6 +279,7 @@ function telaProjeto(uuid) {
       </div>
       ${parcial ? `<p class="aviso-parcial">${aviso}</p>` : ""}
     </section>
+    ${p.relatorios.length ? "" : `<p class="vazio">Nenhum relatório neste projeto ainda. Para incluir um, abra o relatório e use “Editar dados”.</p>`}
     <div class="grade">${p.relatorios.map((r) => `
       <div class="cartao cartao-vistoria">
         <input type="checkbox" data-marcar="${esc(r.uuid)}" data-projeto="${esc(p.uuid)}" ${marcados.includes(r) ? "checked" : ""} aria-label="Incluir a vistoria ${r.vistoria} no compilado">
@@ -341,7 +342,7 @@ function ligarEventos() {
  * @param itens [{ relatorio, mudar }]
  * @returns true se tudo foi gravado
  */
-async function gravar(itens) {
+async function gravar(itens, depois = null) {
   const d = $("dialogoSalvando");
   $("textoSalvando").textContent = "";
   d.showModal();
@@ -352,6 +353,7 @@ async function gravar(itens) {
       await salvarRelatorio(fonte, relatorio, mudar);
       feitos++;
     }
+    if (depois) await depois();
   } catch (e) {
     d.close();
     if (e instanceof acesso.SessaoExpirada) {
@@ -467,8 +469,18 @@ function editarProjeto(uuid) {
       concluido: form.elements.concluido.checked,
     };
     const agora = Date.now();
-    // O projeto viaja dentro de cada relatório: todos precisam ser regravados.
-    return gravar(p.relatorios.map((r) => ({ relatorio: r, mudar: mudarDadosDoProjeto(p, novo, agora) })));
+    // O projeto fica no projetos.json e viaja dentro de cada relatório: os dois são regravados.
+    return gravar(
+      p.relatorios.map((r) => ({ relatorio: r, mudar: mudarDadosDoProjeto(p, novo, agora) })),
+      () => gravarProjeto(fonte, {
+        uuid: p.uuid,
+        titulo: novo.titulo,
+        subtitulo: novo.subtitulo,
+        status: novo.concluido ? "FINALIZADO" : "RASCUNHO",
+        dataCriacao: p.dataCriacao,
+        dataAtualizacao: agora,
+      })
+    );
   });
 }
 

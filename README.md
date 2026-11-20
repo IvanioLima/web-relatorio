@@ -63,7 +63,7 @@ Depois abra `http://localhost:8000/?demo=1`.
 
 - `index.html`, `css/app.css` — página e estilos.
 - `js/drive.js` — login e leitura do Google Drive; `js/demo.js` — dados fictícios.
-- `js/dados.js` — relatórios, projetos e numeração das vistorias.
+- `js/dados.js` — relatórios (pelo `indice.json` da pasta raiz, conferindo a versão de cada pasta), projetos (dos relatórios e do `projetos.json`) e numeração das vistorias.
 - `js/edicao.js` — gravação das edições no Drive (mesmo protocolo de versões do app).
 - `js/pdf.js` — PDF com o mesmo desenho do app (`PdfExporter.kt`); `js/exportar.js` — .zip e KMZ.
 - `vendor/` — jsPDF 2.5.2 e JSZip 3.10.1 (cópias locais); `fonts/` — Liberation Sans.

@@ -107,6 +107,18 @@ function fotoFicticia(nome) {
   return new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
 }
 
+/** projetos.json e indice.json da demonstração (um projeto ainda sem relatórios). */
+const ARQUIVOS_RAIZ = {
+  "projetos.json": {
+    formato: "fotorelatorio-projetos",
+    versao: 1,
+    projetos: [
+      PROJETO,
+      { uuid: "proj-2", titulo: "Estação de tratamento", subtitulo: "Ampliação 2027", status: "RASCUNHO", dataCriacao: BASE + 30 * DIA, dataAtualizacao: BASE + 30 * DIA, excluido: false },
+    ],
+  },
+};
+
 const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
 export const demo = {
@@ -157,4 +169,12 @@ export const demo = {
   },
 
   async apagarArquivo() {},
+
+  async lerArquivoRaiz(nome) {
+    return ARQUIVOS_RAIZ[nome] ? structuredClone(ARQUIVOS_RAIZ[nome]) : null;
+  },
+
+  async gravarArquivoRaiz(nome, objeto) {
+    ARQUIVOS_RAIZ[nome] = structuredClone(objeto);
+  },
 };

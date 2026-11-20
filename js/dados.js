@@ -1,30 +1,17 @@
-// Modelo de dados do site: relatórios lidos do Drive (com cache por versão), projetos derivados
-// dos relatórios e numeração das vistorias.
+// Modelo de dados do site: relatórios lidos do Drive (pelo indice.json, com conferência de
+// versão), projetos (dos relatórios e do projetos.json) e numeração das vistorias.
 
 import { emParalelo, SessaoExpirada } from "./drive.js";
 
-const CHAVE_CACHE = "fr_cache_v1";
+const CHAVE_CACHE_ANTIGO = "fr_cache_v1";
+export const ARQ_INDICE = "indice.json";
+export const ARQ_PROJETOS = "projetos.json";
 
-function lerCache() {
-  try {
-    return JSON.parse(localStorage.getItem(CHAVE_CACHE) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function gravarCache(cache) {
-  try {
-    localStorage.setItem(CHAVE_CACHE, JSON.stringify(cache));
-  } catch {
-    // Sem espaço no navegador: segue sem cache (só fica mais lento na próxima abertura).
-    localStorage.removeItem(CHAVE_CACHE);
-  }
-}
-
+/** Remove o cache das versões anteriores do site (que ficava no navegador). */
 export function limparCache() {
-  localStorage.removeItem(CHAVE_CACHE);
+  localStorage.removeItem(CHAVE_CACHE_ANTIGO);
 }
+limparCache();
 
 const num = (v, padrao = 0) => (typeof v === "number" && isFinite(v) ? v : padrao);
 const numOuNulo = (v) => (typeof v === "number" && isFinite(v) ? v : null);
@@ -74,39 +61,116 @@ function converter(pasta, bruto) {
   };
 }
 
+/** Dados do relatório para o índice: como no JSON da pasta, sem os traços das marcações (o site não os usa). */
+function entradaIndice(versao, bruto) {
+  return {
+    versao,
+    relatorio: bruto.relatorio || {},
+    fotos: (bruto.fotos || []).map(({ anotacoesJson, ...resto }) => resto),
+  };
+}
+
 /**
- * Lê todos os relatórios da fonte. Só baixa o JSON dos que mudaram desde a última vez
- * (compara a versão guardada nas propriedades da pasta).
- * @returns {{relatorios: object[], falhas: number}}
+ * Lê todos os relatórios. Primeiro o indice.json da raiz (gravado pelo app e por este site):
+ * relatórios cuja versão no índice bate com a da pasta saem dali, sem baixar nada; só os
+ * demais são lidos pasta por pasta. Se algo mudou, o índice é regravado (não é obrigatório:
+ * se falhar, fica para a próxima vez).
+ * @returns {{relatorios: object[], projetos: object[], falhas: number}}
  */
 export async function carregarRelatorios(fonte, aoProgredir = () => {}) {
   const pastas = await fonte.listarPastas();
-  const usarCache = fonte.nome === "drive";
-  const cache = usarCache ? lerCache() : {};
+  const [indice, arquivoProjetos] = await Promise.all([
+    lerOpcional(fonte, ARQ_INDICE),
+    lerOpcional(fonte, ARQ_PROJETOS),
+  ]);
+  const anteriores = indice?.relatorios || {};
   const novo = {};
+  let mudou = !indice;
   let feitos = 0;
   let falhas = 0;
   const relatorios = await emParalelo(pastas, 6, async (pasta) => {
-    let dados = null;
-    const guardado = cache[pasta.id];
-    if (guardado && guardado.versao === pasta.versao && pasta.versao) {
-      dados = guardado.dados;
-    } else {
+    let entrada = anteriores[pasta.id];
+    if (!entrada || !pasta.versao || entrada.versao !== pasta.versao) {
       try {
-        dados = converter(pasta, await fonte.lerJson(pasta));
+        entrada = entradaIndice(pasta.versao, await fonte.lerJson(pasta));
+        mudou = true;
       } catch (e) {
         if (e instanceof SessaoExpirada) throw e;
+        entrada = null;
         falhas++;
       }
     }
-    if (dados) novo[pasta.id] = { versao: pasta.versao, dados };
     aoProgredir(++feitos, pastas.length);
-    return dados;
+    if (!entrada) return null;
+    novo[pasta.id] = entrada;
+    return converter(pasta, entrada);
   });
-  if (usarCache) gravarCache(novo);
+  if (Object.keys(anteriores).some((id) => !novo[id])) mudou = true;
+  if (mudou && Object.keys(novo).length) {
+    try {
+      await fonte.gravarArquivoRaiz(ARQ_INDICE, {
+        formato: "fotorelatorio-indice",
+        versao: 1,
+        atualizadoEm: Date.now(),
+        relatorios: novo,
+      });
+    } catch (e) {
+      if (e instanceof SessaoExpirada) throw e;
+      // O índice é só um atalho.
+    }
+  }
   const lista = relatorios.filter(Boolean).sort((a, b) => b.dataCriacao - a.dataCriacao);
+  const registros = registrosDeProjetos(arquivoProjetos);
+  // Projeto excluído (em algum aparelho) depois dos dados que o relatório carrega: relatório avulso.
+  for (const r of lista) {
+    const reg = r.projeto && registros.get(r.projeto.uuid);
+    if (reg?.excluido && reg.dataAtualizacao >= r.projeto.dataAtualizacao) r.projeto = null;
+  }
   numerarVistorias(lista);
-  return { relatorios: lista, falhas };
+  return { relatorios: lista, projetos: listarProjetos(lista, registros), registros, falhas };
+}
+
+async function lerOpcional(fonte, nome) {
+  try {
+    return await fonte.lerArquivoRaiz(nome);
+  } catch (e) {
+    if (e instanceof SessaoExpirada) throw e;
+    return null;
+  }
+}
+
+/** projetos.json → Map uuid → registro (inclusive as exclusões). */
+function registrosDeProjetos(arquivo) {
+  const mapa = new Map();
+  for (const p of arquivo?.projetos || []) {
+    if (!p?.uuid) continue;
+    mapa.set(p.uuid, {
+      uuid: p.uuid,
+      titulo: p.titulo || "",
+      subtitulo: p.subtitulo || "",
+      status: p.status === "FINALIZADO" ? "FINALIZADO" : "RASCUNHO",
+      dataCriacao: num(p.dataCriacao),
+      dataAtualizacao: num(p.dataAtualizacao),
+      excluido: !!p.excluido,
+    });
+  }
+  return mapa;
+}
+
+/**
+ * Grava no projetos.json os novos dados de um projeto (lê o arquivo de novo antes, para não
+ * perder o que outro aparelho gravou nesse meio-tempo).
+ */
+export async function gravarProjeto(fonte, projeto) {
+  const registros = registrosDeProjetos(await lerOpcional(fonte, ARQ_PROJETOS));
+  const atual = registros.get(projeto.uuid);
+  if (atual && atual.dataAtualizacao > projeto.dataAtualizacao) return;
+  registros.set(projeto.uuid, { ...projeto, excluido: false });
+  await fonte.gravarArquivoRaiz(ARQ_PROJETOS, {
+    formato: "fotorelatorio-projetos",
+    versao: 1,
+    projetos: [...registros.values()].sort((a, b) => a.uuid.localeCompare(b.uuid)),
+  });
 }
 
 /** Dentro de cada projeto, o relatório mais antigo é a Vistoria 1. Grava em r.vistoria. */
@@ -128,7 +192,7 @@ function numerarVistorias(relatorios) {
  * Projetos derivados dos relatórios (cada relatório carrega os dados do seu projeto; vale a
  * cópia mais recente). Cada projeto traz seus relatórios na ordem das vistorias.
  */
-export function listarProjetos(relatorios) {
+export function listarProjetos(relatorios, registros = new Map()) {
   const mapa = new Map();
   for (const r of relatorios) {
     if (!r.projeto) continue;
@@ -139,6 +203,16 @@ export function listarProjetos(relatorios) {
       atual.relatorios.push(r);
       if (r.projeto.dataAtualizacao > atual.dataAtualizacao) Object.assign(atual, r.projeto);
     }
+  }
+  // projetos.json: projetos ainda sem relatórios, e dados mais novos que os dos relatórios.
+  for (const reg of registros.values()) {
+    if (reg.excluido) {
+      if (mapa.get(reg.uuid)?.dataAtualizacao <= reg.dataAtualizacao) mapa.delete(reg.uuid);
+      continue;
+    }
+    const atual = mapa.get(reg.uuid);
+    if (!atual) mapa.set(reg.uuid, { ...reg, relatorios: [] });
+    else if (reg.dataAtualizacao > atual.dataAtualizacao) Object.assign(atual, { ...reg, relatorios: atual.relatorios });
   }
   const projetos = [...mapa.values()];
   projetos.forEach((p) => p.relatorios.sort((a, b) => a.vistoria - b.vistoria));
